@@ -18,7 +18,7 @@ class CreatePaymentsTable extends Migration
             $table->string('reference')->nullable();
             $table->decimal('amount', 10, 2)->nullable()->default(0);
             $table->string('customerID')->nullable();
-            $table->boolean('status')->nullable();
+            $table->string('status')->nullable();
             $table->string('paymentGateway')->nullable();
             $table->date('transactionDate')->nullable();
             $table->timestamps();
