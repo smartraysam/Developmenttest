@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Paystack;
+use App\Models\Payments;
+use Carbon\Carbon;
 
 class PaymentsController extends Controller
 {
@@ -51,95 +53,35 @@ class PaymentsController extends Controller
     public function handleGatewayCallback()
     {
         $paymentDetails = Paystack::getPaymentData();
-
         \Log::info($paymentDetails);
+
         if($paymentDetails['status'] ==true){
-            \Log::info($paymentDetails['data']);
-            
-            \Log::info($paymentDetails['data']['metadata']);
-            \Log::info($paymentDetails['data']['metadata']['customer_id']);
-            
-            dd($paymentDetails['data']['metadata']['customer_id']);
-            
+            $newPayment = new Payments();
+            $newPayment->reference = $paymentDetails['data']['reference'];
+            $newPayment->amount = ($paymentDetails['data']['amount'])/100;
+            $newPayment->customerID = $paymentDetails['data']['metadata']['customer_id'];
+            $newPayment->status = $paymentDetails['status'];
+            $newPayment->transactionDate = Carbon::now()->toDateString();
+            $newPayment->paymentGateway = "PayStack";
+            $newPayment->save();
+
+            // dd($paymentDetails['data']['metadata']['customer_id']);
+
+        } else{
+            $newPayment = new Payments();
+            $newPayment->reference = $paymentDetails['data']['reference'];
+            $newPayment->amount = ($paymentDetails['data']['amount'])/100;
+            $newPayment->customerID = $paymentDetails['data']['metadata']['customer_id'];
+            $newPayment->status = $paymentDetails['status'];
+            $newPayment->transactionDate = Carbon::now()->toDateString();
+            $newPayment->paymentGateway = "PayStack";
+            $newPayment->save();
+
+            // dd($paymentDetails['data']['metadata']['customer_id']);
         }
-        
+
         // Now you have the payment details,
         // you can store the authorization_code in your db to allow for recurrent subscriptions
         // you can then redirect or do whatever you want
-    }
-    /**
-     * Display a listing of the resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function index()
-    {
-        //
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
-    public function store(Request $request)
-    {
-        //
-    }
-
-    /**
-     * Display the specified resource.
-     *
-     * @param  \App\Models\Payments  $payments
-     * @return \Illuminate\Http\Response
-     */
-    public function show(Payments $payments)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @param  \App\Models\Payments  $payments
-     * @return \Illuminate\Http\Response
-     */
-    public function edit(Payments $payments)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Payments  $payments
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, Payments $payments)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  \App\Models\Payments  $payments
-     * @return \Illuminate\Http\Response
-     */
-    public function destroy(Payments $payments)
-    {
-        //
     }
 }
