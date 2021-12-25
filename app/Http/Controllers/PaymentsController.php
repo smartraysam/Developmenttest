@@ -15,35 +15,37 @@ class PaymentsController extends Controller
     public function paynow()
     {
 
-        $split = [
-            "type" => "percentage",
-            "currency" => "NGN",
-            "subaccounts" => [
-                ["subaccount" => "ACCT_g2obdni3dl6hem6", "share" => 10],
-            ],
-            "bearer_type" => "all",
-            "main_account_share" => 90,
-        ];
-        return view('payment', compact('split'));
+        // $split = [
+        //     "type" => "percentage",
+        //     "currency" => "NGN",
+        //     "subaccounts" => [
+        //         ["subaccount" => "ACCT_g2obdni3dl6hem6", "share" => 10],
+        //     ],
+        //     "bearer_type" => "all",
+        //     "main_account_share" => 90,
+        // ];
+        // return view('payment', compact('split'));
+        return view('payment');
     }
 
     public function redirectToGateway(Request $request)
     {
+        // dd(( $request->email));
 
         $customer_email = $request->email;
 
         $amount = $request->amount; //converting to kobo - paystack rule
         $package = "basic";
         $reference = Paystack::genTranxRef();
-        $kobo = ($amount) * 100; //add the user inputted amount and the outstanding fees
-        $metadata = ['customer_id' => 1, 'client_id' => 12, 'package' => $package]; //metadata for the data i need
+        $kobo = ($amount)/3 * 100; //add the user inputted amount and the outstanding fees
+        $metadata = ['customer_id' =>  mt_rand(1000000,9999999) , 'client_id' => 12, 'package' => $package]; //metadata for the data i need
         $request->request->add(['reference' => $reference, 'email' => $customer_email, 'amount' => $kobo, 'currency' => 'NGN', 'channels' => ['card', 'bank_transfer'], 'metadata' => $metadata, 'callback_url' => env('APP_URL') . 'payment/callback']);
+        // dd((($request)->request));
         try { //to ensure the page return back to the user when the session has expired
             return Paystack::getAuthorizationUrl()->redirectNow();
         } catch (\Exception $e) {
-            // dd(($e));
             \Log::info($e);
-            return response()->json(["status" => "error", "msg" =>$e]);
+            return response()->json(["status" => "error", "msg" => "Error occur while access payment gateway, please try again!!!"]);
 
         }
     }
@@ -66,7 +68,7 @@ class PaymentsController extends Controller
             $newPayment->transactionDate = Carbon::now()->toDateString();
             $newPayment->paymentGateway = "PayStack";
             $newPayment->save();
-
+            return redirect('/payment');
             // dd($paymentDetails['data']['metadata']['customer_id']);
 
         } else{
@@ -78,7 +80,7 @@ class PaymentsController extends Controller
             $newPayment->transactionDate = Carbon::now()->toDateString();
             $newPayment->paymentGateway = "PayStack";
             $newPayment->save();
-
+            return redirect('/payment');
             // dd($paymentDetails['data']['metadata']['customer_id']);
         }
 
@@ -95,7 +97,7 @@ class PaymentsController extends Controller
         // Enter the details of the payment
         $data = [
             'payment_options' => 'card,banktransfer',
-            'amount' => 500,
+            'amount' => request()->amount,
             'email' => request()->email,
             'tx_ref' => $reference,
             'currency' => "NGN",
@@ -104,6 +106,10 @@ class PaymentsController extends Controller
                 'email' => request()->email,
                 "phone_number" => request()->phone,
                 "name" => request()->name
+            ],
+
+            "meta" => [
+                "id" => mt_rand(1000000,9999999)
             ],
 
             "customizations" => [
@@ -139,17 +145,17 @@ class PaymentsController extends Controller
         $data = Flutterwave::verifyTransaction($transactionID);
 
         \Log::info($data);
-        // dd( $data['data']['tx_ref']);
 
         //database
         $newPayment = new Payments();
         $newPayment->reference = $data['data']['tx_ref'];
         $newPayment->amount = ($data['data']['amount']);
-        $newPayment->customerID = $data['data']['customer']['id'];
+        $newPayment->customerID = $data['data']['meta']['id'];
         $newPayment->status = $data['status'];
         $newPayment->transactionDate = Carbon::now()->toDateString();
         $newPayment->paymentGateway = "Flutterwave";
         $newPayment->save();
+        return redirect('/payment');
         }
         elseif ($status ==  'cancelled'){
             //Put desired action/code after transaction has been cancelled here
@@ -165,11 +171,12 @@ class PaymentsController extends Controller
         $newPayment = new Payments();
         $newPayment->reference = $data['data']['tx_ref'];
         $newPayment->amount = ($data['data']['amount']);
-        $newPayment->customerID = $data['data']['customer']['id'];
+        $newPayment->customerID = $data['data']['meta']['id'];
         $newPayment->status = $data['status'];
         $newPayment->transactionDate = Carbon::now()->toDateString();
         $newPayment->paymentGateway = "Flutterwave";
         $newPayment->save();
+        return redirect('/payment');
         }
         // Get the transaction from your DB using the transaction reference (txref)
         // Check if you have previously given value for the transaction. If you have, redirect to your successpage else, continue
