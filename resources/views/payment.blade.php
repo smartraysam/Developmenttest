@@ -419,6 +419,7 @@
                     <div class="flex items-center">
                         <form method="POST" action="{{ route('pay') }}" accept-charset="UTF-8" class="form-horizontal"
                             role="form">
+                            @csrf
                             <div class="row" style="margin-bottom:40px;">
                                 <div class="col-md-8 col-md-offset-2">
                                     <p>
@@ -432,22 +433,22 @@
 
                                     {{-- required --}}
                                     <input type="hidden" name="orderID" value="345">
-                                    <input type="hidden" name="amount" value="<?php echo rand(500,10000); ?>"> {{-- required in kobo --}}
-                                    <input type="hidden" name="quantity" value="3">
+                                    <input type="hidden" name="amount" value="<?php echo mt_rand(500,2000)?>"> {{-- required in kobo --}}
                                     <input type="hidden" name="currency" value="NGN">
-                                    <input type="hidden" name="metadata" value="{{ json_encode($array = ['key_name' => 'value']) }}">
+                                    <input type="hidden" name="quantity" value="3">
+                                    <input type="hidden" name="metadata" value="{{ json_encode($array = ['key_name' => 'value',]) }}" >
 
 
                                     {{-- For other necessary things you want to add to your payload. it is optional though --}}
                                     <input type="hidden" name="reference" value="{{ Paystack::genTranxRef() }}">
 
-                                    {{-- required --}}
-                                    <input type="hidden" name="split_code" value="SPL_EgunGUnBeCareful">
+                                    {{-- required comment out if spilt is not used--}}
+                                    {{--<input type="hidden" name="split_code" value="SPL_EgunGUnBeCareful">
+
                                     {{--<input type="hidden" name="split" value="{{ json_encode($split) }}"> --}}
-                                    {{ csrf_field() }} {{-- works only when using laravel 5.1, 5.2 --}}
 
                                     {{--<input type="hidden" name="_token" value="{{ csrf_token() }}">
-                                     employ this in place of csrf_field only in laravel 5.0 --}}
+                                    {{--employ this in place of csrf_field only in laravel 5.0 --}}
 
                                     <p>
 
@@ -461,7 +462,7 @@
 
                         <form method="POST" action="{{ route('rave') }}" accept-charset="UTF-8"
                             class="form-horizontal" role="form">
-                            {{ csrf_field() }}
+                            @csrf
 
                             <label>Pay with Flutterwave</label>
                             <input type="hidden" name="name" value="Tonisage" />
