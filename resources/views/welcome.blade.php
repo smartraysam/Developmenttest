@@ -21,7 +21,7 @@
                 <th>Status</th>
                 <th>PaymentGateway</th>
                 <th>TransactionDate</th>
-                <th>Action</th>
+                {{-- <th>Action</th> --}}
             </tr>
         </thead>
         <tbody>
@@ -52,12 +52,12 @@
             {data: 'status', name: 'status'},
             {data: 'paymentGateway', name: 'paymentGateway'},
             {data: 'transactionDate', name: 'transactionDate'},
-            {
-                data: 'action',
-                name: 'action',
-                orderable: true,
-                searchable: true
-            },
+            // {
+            //     data: 'action',
+            //     name: 'action',
+            //     orderable: true,
+            //     searchable: true
+            // },
         ]
     });
 
