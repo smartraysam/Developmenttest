@@ -27,3 +27,5 @@ Route::get('/payment',  [App\Http\Controllers\PaymentsController::class, 'paynow
 Route::post('/rave', [App\Http\Controllers\PaymentsController::class, 'initialize'])->name('rave');
 // The callback url after a payment
 Route::get('/rave/callback', [App\Http\Controllers\PaymentsController::class, 'callback'])->name('callback');
+
+Route::get('/payment/list', [App\Http\Controllers\PaymentsController::class, 'getPayments'])->name('payments.list');
