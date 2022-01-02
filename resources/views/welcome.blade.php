@@ -43,7 +43,7 @@
     $(document).ready(function() {
 
         var table = $('#yajra-datatable').DataTable({
-            processing: true,
+            processing: false,
             serverSide: true,
             orderable: true,
             searchable: true,
@@ -67,7 +67,7 @@
 
         setInterval( function () {
             table.ajax.reload( null, false ); // user paging is not reset on reload
-        }, 10000 );
+        }, 5000 );
 
     });
 
