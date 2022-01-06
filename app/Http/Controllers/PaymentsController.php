@@ -26,20 +26,19 @@ class PaymentsController extends Controller
 
     public function redirectToGateway(Request $request)
     {
-
         $customer_email = $request->email;
-
         $amount = $request->amount; //converting to kobo - paystack rule
         $package = "basic";
         $reference = Paystack::genTranxRef();
         $kobo = ($amount) * 100; //add the user inputted amount and the outstanding fees
         $metadata = ['customer_id' => 1, 'client_id' => 12, 'package' => $package]; //metadata for the data i need
         $request->request->add(['reference' => $reference, 'email' => $customer_email, 'amount' => $kobo, 'currency' => 'NGN', 'channels' => ['card', 'bank_transfer'], 'metadata' => $metadata, 'callback_url' => env('APP_URL') . 'payment/callback']);
+    
         try { //to ensure the page return back to the user when the session has expired
             return Paystack::getAuthorizationUrl()->redirectNow();
         } catch (\Exception $e) {
             \Log::info($e);
-            return \response()->json(["status" => "error", "msg" => "Error occur while access payment gateway, please try again!!!"]);
+            return \response()->json(["id" => "error", "msg" => "Error occur while access payment gateway, please try again!!!"]);
 
         }
     }
