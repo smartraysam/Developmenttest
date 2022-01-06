@@ -17,3 +17,10 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+
+// this is an api route to retun payment data into json
+// calling from postman  .. baseurl/api/get/payment
+// method is GET
+// parament to set are.. start_date  and end_date   value in YYYY-MM-DD
+Route::get('/get/payments', [App\Http\Controllers\PaymentsController::class, 'RevenueTransactions']);

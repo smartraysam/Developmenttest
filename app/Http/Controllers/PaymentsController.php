@@ -253,5 +253,95 @@ class PaymentsController extends Controller
 
     }
 
+    // filter data with date range  
+    //this function is called in your api
+
+    public function RevenueTransactions(Request $request)
+    {
+        try {
+            $from = $request->start_date; // date view
+            $to = $request->end_date; // date from view 
+
+            if(empty($from) || empty($to)){
+                return response()->json([
+                    "status" => "info",
+                    "data" => [],
+                    "message"=>"start_date or end_date parameter not set",
+                   ]); 
+            }
+            $transactions = array();
+            $today = date("Y-m-d");
+            $yesterday = Carbon::yesterday()->format("Y-m-d");
+    
+            if (($from == $today && $to == $today) ||($from == $yesterday && $to == $yesterday)) {
+                $transactions = PaymentTransact::where('payment_status', '=', "successful")
+                ->whereDate('payment_transacts.created_at', $from)  // there is date filter for a single date
+                    ->join('estateusers', 'estateusers.meternumber', 'payment_transacts.payerid')
+                    ->join('users', 'users.id', 'estateusers.user_id')
+                   ->orderBy('id', 'desc')
+                    ->select('payment_transacts.*', 'users.name')->get();
+            } else {
+                $start = Carbon::parse($from);
+                $end = Carbon::parse($to)->addDay();
+                $this_month = [$start, $end];
+                $transactions = PaymentTransact::where('payment_status', '=', "successful")
+                ->whereBetween('payment_transacts.created_at', $this_month) // date filter  for date range
+                   ->join('estateusers', 'estateusers.meternumber', 'payment_transacts.payerid')
+                    ->join('users', 'users.id', 'estateusers.user_id')
+                   ->orderBy('id', 'desc')
+                    ->select('payment_transacts.*', 'users.name')->get();
+            }
+           
+            return response()->json([
+                "status" => "ok",
+                "data" => $transactions
+               ]);
+        } catch (\Throwable $th) {
+            return response()->json([
+                "status" => "error",
+                "data" => [],
+                "message"=>"Error occur",
+               ]);
+        }
+      
+    }
+
+
+    // the function populate your datatable directly
+    public function Transactions(Request $request)
+    {
+        
+            $from = $request->start_date; // date view
+            $to = $request->end_date; // date from view 
+            $transactions = array();
+            $today = date("Y-m-d");
+            $yesterday = Carbon::yesterday()->format("Y-m-d");
+    
+            if (($from == $today && $to == $today) ||($from == $yesterday && $to == $yesterday)) {
+                $transactions = PaymentTransact::where('payment_status', '=', "successful")
+                ->whereDate('payment_transacts.created_at', $from)  // there is date filter for a single date
+                    ->join('estateusers', 'estateusers.meternumber', 'payment_transacts.payerid')
+                    ->join('users', 'users.id', 'estateusers.user_id')
+                   ->orderBy('id', 'desc')
+                    ->select('payment_transacts.*', 'users.name')->get();
+            } else {
+                $start = Carbon::parse($from);
+                $end = Carbon::parse($to)->addDay();
+                $this_month = [$start, $end];
+                $transactions = PaymentTransact::where('payment_status', '=', "successful")
+                ->whereBetween('payment_transacts.created_at', $this_month) // date filter  for date range
+                   ->join('estateusers', 'estateusers.meternumber', 'payment_transacts.payerid')
+                    ->join('users', 'users.id', 'estateusers.user_id')
+                   ->orderBy('id', 'desc')
+                    ->select('payment_transacts.*', 'users.name')->get();
+            }
+           
+      
+        if (request()->ajax()) {
+            return DataTables::of($transactions)  // return data to datatable
+                ->make(true);
+        }
+    }
+
 
 }
