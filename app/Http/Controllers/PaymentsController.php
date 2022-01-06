@@ -9,9 +9,76 @@ use App\Models\Payments;
 use Carbon\Carbon;
 use KingFlamez\Rave\Facades\Rave as Flutterwave;
 use DataTables;
+use Khill\Lavacharts\Lavacharts;
 
 class PaymentsController extends Controller
 {
+    public function lavaChart(){
+
+        $paymentChart = \Lava::DataTable();
+        $combinedChart = \Lava::DataTable();
+
+        //total amount chart
+        $paymentChart->addDateColumn('Year')
+        ->addNumberColumn('Amount');
+
+        //paystack and flutterwave combined charrt
+        $combinedChart->addDateColumn('Year')
+        ->addNumberColumn('Paystack')
+        ->addNumberColumn('Flutterwave')
+        ->addNumberColumn('Total');
+
+        $dateArray = Payments::distinct()->where('status', 'success')->get(['transactionDate']);
+
+        foreach ($dateArray as $date){
+            $amountX = 0.00;
+            $paystackX = 0.00;
+            $flutterwaveX = 0.00;
+
+            $amountArray = Payments::where('transactionDate', $date->transactionDate)->get(['amount']);
+            $paystackArray = Payments::where('transactionDate', $date->transactionDate)->where('paymentGateway', 'paystack')->get(['amount']);
+            $flutterwaveArray = Payments::where('transactionDate', $date->transactionDate)->where('paymentGateway', 'flutterwave')->get(['amount']);
+
+            //Total amount
+            foreach ($amountArray as $amount) {
+                $amountX += $amount->amount;
+             }
+
+            //Paystack amount
+            foreach ($paystackArray as $paystack) {
+            $paystackX += $paystack->amount;
+            }
+
+            //flutterwave amount
+            foreach ($flutterwaveArray as $flutterwave) {
+            $flutterwaveX += $flutterwave->amount;
+            }
+
+            $paymentChart->addRow([$date->transactionDate, $amountX]);
+            $combinedChart->addRow([$date->transactionDate, $paystackX, $flutterwaveX, $amountX]);
+        }
+
+        //Amount Chart
+        \Lava::ColumnChart('PaymentChart', $paymentChart, [
+            'title' => 'Payments',
+            'legend' => ['position' => 'out'],
+            'chartArea' => ['width' => '50%'],
+            'hAxis' => ['title' => 'Day', 'format' => 'MMM dd'],
+            'vAxis' => ['title' => 'Amount'] //VerticalAxis Options
+        ]);
+
+        //Paystack & Flutterwave Payments Breakdown
+        \Lava::ColumnChart('CombinedChart', $combinedChart, [
+            'title' => 'Payments Breakdown',
+            'legend' => ['position' => 'out'],
+            'chartArea' => ['width' => '70%'],
+            'hAxis' => ['title' => 'Day', 'format' => 'MMM dd'],
+            'vAxis' => ['title' => 'Amount(₦)'] //VerticalAxis Options
+        ]);
+
+        return view('welcome');
+    }
+
 
     public function paynow()
     {
@@ -29,27 +96,18 @@ class PaymentsController extends Controller
         return view('payment');
     }
 
+    //DataTable
     public function getPayments(Request $request)
     {
-        // $data = Payments::latest()->get();
-        // dd("5");
         if ($request->ajax()) {
             $data = Payments::latest()->get();
-            return Datatables::of($data)
-                ->addIndexColumn()
-                // ->addColumn('action', function($row){
-                //     $actionBtn = '<a href="javascript:void(0)" class="edit btn btn-success btn-sm">Edit</a> <a href="javascript:void(0)" class="delete btn btn-danger btn-sm">Delete</a>';
-                //     return $actionBtn;
-                // })
-                // ->rawColumns(['action'])
-                ->make(true);
+            return Datatables::of($data)->addIndexColumn()->make(true);
         }
     }
 
+    //Paystacck
     public function redirectToGateway(Request $request)
     {
-        // dd(( $request->email));
-
         $customer_email = $request->email;
 
         $amount = $request->amount; //converting to kobo - paystack rule
@@ -58,7 +116,7 @@ class PaymentsController extends Controller
         $kobo = ($amount) * 100; //add the user inputted amount and the outstanding fees
         $metadata = ['customer_id' =>  mt_rand(1000000,9999999), 'client_id' => 12, 'package' => $package]; //metadata for the data i need
         $request->request->add(['reference' => $reference, 'email' => $customer_email, 'amount' => $kobo, 'currency' => 'NGN', 'channels' => ['card', 'bank_transfer'], 'metadata' => $metadata, 'callback_url' => env('APP_URL') . 'payment/callback']);
-        // dd((($request)->request));
+
         try { //to ensure the page return back to the user when the session has expired
             return Paystack::getAuthorizationUrl()->redirectNow();
         } catch (\Exception $e) {
@@ -68,10 +126,7 @@ class PaymentsController extends Controller
         }
     }
 
-    /**
-     * Obtain Paystack payment information
-     * @return void
-     */
+    //Obtain Paystack payment information
     public function handleGatewayCallback()
     {
         $paymentDetails = Paystack::getPaymentData();
@@ -87,9 +142,9 @@ class PaymentsController extends Controller
             $newPayment->paymentGateway = "PayStack";
             $newPayment->save();
             return redirect('/payment');
-            // dd($paymentDetails['data']['metadata']['customer_id']);
+        }
 
-        } else{
+        else{
             $newPayment = new Payments();
             $newPayment->reference = $paymentDetails['data']['reference'];
             $newPayment->amount = ($paymentDetails['data']['amount'])/100;
@@ -99,14 +154,11 @@ class PaymentsController extends Controller
             $newPayment->paymentGateway = "PayStack";
             $newPayment->save();
             return redirect('/payment');
-            // dd($paymentDetails['data']['metadata']['customer_id']);
         }
-
-        // Now you have the payment details,
-        // you can store the authorization_code in your db to allow for recurrent subscriptions
-        // you can then redirect or do whatever you want
     }
 
+
+    //Flutterwave
     public function initialize()
     {
         //This generates a payment reference
@@ -147,13 +199,9 @@ class PaymentsController extends Controller
         return redirect($payment['data']['link']);
     }
 
-    /**
-     * Obtain Rave callback information
-     * @return void
-     */
+    // Obtain Rave callback information
     public function callback()
     {
-
         $status = request()->status;
 
         //if payment is successful
@@ -183,7 +231,7 @@ class PaymentsController extends Controller
         else{
             //Put desired action/code after transaction has failed here
             \Log::info($data);
-        // dd( $data['data']['tx_ref']);
+
 
         //database
         $newPayment = new Payments();

@@ -11,7 +11,16 @@
 
 <body>
 
+
+
     <div class="container mt-5" id="reload">
+        {{-- <div id="pop_div"></div>
+            @columnchart('PaymentChart', 'pop_div')
+        <br> --}}
+
+        <div id="pop1_div"></div>
+            @columnchart('CombinedChart', 'pop1_div')
+
         <h2 class="mb-4">Customer's Payment</h2>
         <table class="table table-bordered" id="yajra-datatable">
             <thead>

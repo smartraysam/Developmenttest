@@ -13,9 +13,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', [App\Http\Controllers\PaymentsController::class, 'lavaChart']);
 
 //paystack
 Route::post('/pay', [App\Http\Controllers\PaymentsController::class, 'redirectToGateway'])->name('pay');
