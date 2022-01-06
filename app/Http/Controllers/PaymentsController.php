@@ -5,25 +5,107 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Paystack;
+use App\Models\Payments;
+use Carbon\Carbon;
+use KingFlamez\Rave\Facades\Rave as Flutterwave;
+use DataTables;
+use Khill\Lavacharts\Lavacharts;
 
 class PaymentsController extends Controller
 {
+    public function lavaChart(){
+
+        $paymentChart = \Lava::DataTable();
+        $combinedChart = \Lava::DataTable();
+
+        //total amount chart
+        $paymentChart->addDateColumn('Year')
+        ->addNumberColumn('Amount');
+
+        //paystack and flutterwave combined charrt
+        $combinedChart->addDateColumn('Year')
+        ->addNumberColumn('Paystack')
+        ->addNumberColumn('Flutterwave')
+        ->addNumberColumn('Total');
+
+        $dateArray = Payments::distinct()->where('status', 'success')->get(['transactionDate']);
+
+        foreach ($dateArray as $date){
+            $amountX = 0.00;
+            $paystackX = 0.00;
+            $flutterwaveX = 0.00;
+
+            $amountArray = Payments::where('transactionDate', $date->transactionDate)->get(['amount']);
+            $paystackArray = Payments::where('transactionDate', $date->transactionDate)->where('paymentGateway', 'paystack')->get(['amount']);
+            $flutterwaveArray = Payments::where('transactionDate', $date->transactionDate)->where('paymentGateway', 'flutterwave')->get(['amount']);
+
+            //Total amount
+            foreach ($amountArray as $amount) {
+                $amountX += $amount->amount;
+             }
+
+            //Paystack amount
+            foreach ($paystackArray as $paystack) {
+            $paystackX += $paystack->amount;
+            }
+
+            //flutterwave amount
+            foreach ($flutterwaveArray as $flutterwave) {
+            $flutterwaveX += $flutterwave->amount;
+            }
+
+            $paymentChart->addRow([$date->transactionDate, $amountX]);
+            $combinedChart->addRow([$date->transactionDate, $paystackX, $flutterwaveX, $amountX]);
+        }
+
+        //Amount Chart
+        \Lava::ColumnChart('PaymentChart', $paymentChart, [
+            'title' => 'Payments',
+            'legend' => ['position' => 'out'],
+            'chartArea' => ['width' => '50%'],
+            'hAxis' => ['title' => 'Day', 'format' => 'MMM dd'],
+            'vAxis' => ['title' => 'Amount'] //VerticalAxis Options
+        ]);
+
+        //Paystack & Flutterwave Payments Breakdown
+        \Lava::ColumnChart('CombinedChart', $combinedChart, [
+            'title' => 'Payments Breakdown',
+            'legend' => ['position' => 'out'],
+            'chartArea' => ['width' => '70%'],
+            'hAxis' => ['title' => 'Day', 'format' => 'MMM dd'],
+            'vAxis' => ['title' => 'Amount(₦)'] //VerticalAxis Options
+        ]);
+
+        return view('welcome');
+    }
+
 
     public function paynow()
     {
 
-        $split = [
-            "type" => "percentage",
-            "currency" => "NGN",
-            "subaccounts" => [
-                ["subaccount" => "ACCT_g2obdni3dl6hem6", "share" => 10],
-            ],
-            "bearer_type" => "all",
-            "main_account_share" => 90,
-        ];
-        return view('payment', compact('split'));
+        // $split = [
+        //     "type" => "percentage",
+        //     "currency" => "NGN",
+        //     "subaccounts" => [
+        //         ["subaccount" => "ACCT_g2obdni3dl6hem6", "share" => 10],
+        //     ],
+        //     "bearer_type" => "all",
+        //     "main_account_share" => 90,
+        // ];
+        // return view('payment', compact('split'));
+        return view('payment');
     }
 
+    //DataTable
+    public function getPayments(Request $request)
+    {
+        if ($request->ajax()) {
+            $data = Payments::latest()->get();
+            return Datatables::of($data)->addIndexColumn()->make(true);
+        }
+    }
+
+    //Paystacck
     public function redirectToGateway(Request $request)
     {
         $customer_email = $request->email;
@@ -31,114 +113,145 @@ class PaymentsController extends Controller
         $package = "basic";
         $reference = Paystack::genTranxRef();
         $kobo = ($amount) * 100; //add the user inputted amount and the outstanding fees
-        $metadata = ['customer_id' => 1, 'client_id' => 12, 'package' => $package]; //metadata for the data i need
+        $metadata = ['customer_id' =>  mt_rand(1000000,9999999), 'client_id' => 12, 'package' => $package]; //metadata for the data i need
         $request->request->add(['reference' => $reference, 'email' => $customer_email, 'amount' => $kobo, 'currency' => 'NGN', 'channels' => ['card', 'bank_transfer'], 'metadata' => $metadata, 'callback_url' => env('APP_URL') . 'payment/callback']);
-    
         try { //to ensure the page return back to the user when the session has expired
             return Paystack::getAuthorizationUrl()->redirectNow();
         } catch (\Exception $e) {
             \Log::info($e);
-            return \response()->json(["id" => "error", "msg" => "Error occur while access payment gateway, please try again!!!"]);
+            return response()->json(["status" => "error", "msg" => "Error occur while access payment gateway, please try again!!!"]);
 
         }
     }
 
-    /**
-     * Obtain Paystack payment information
-     * @return void
-     */
+    //Obtain Paystack payment information
     public function handleGatewayCallback()
     {
         $paymentDetails = Paystack::getPaymentData();
-
         \Log::info($paymentDetails);
+
         if($paymentDetails['status'] ==true){
-            \Log::info($paymentDetails['data']);
-            
-            \Log::info($paymentDetails['data']['metadata']);
-            \Log::info($paymentDetails['data']['metadata']['customer_id']);
-            
-            dd($paymentDetails['data']['metadata']['customer_id']);
-            
+            $newPayment = new Payments();
+            $newPayment->reference = $paymentDetails['data']['reference'];
+            $newPayment->amount = ($paymentDetails['data']['amount'])/100;
+            $newPayment->customerID = $paymentDetails['data']['metadata']['customer_id'];
+            $newPayment->status = $paymentDetails['data']['status'];
+            $newPayment->transactionDate = Carbon::now()->toDateString();
+            $newPayment->paymentGateway = "PayStack";
+            $newPayment->save();
+            return redirect('/payment');
         }
-        
-        // Now you have the payment details,
-        // you can store the authorization_code in your db to allow for recurrent subscriptions
-        // you can then redirect or do whatever you want
-    }
-    /**
-     * Display a listing of the resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function index()
-    {
-        //
+
+        else{
+            $newPayment = new Payments();
+            $newPayment->reference = $paymentDetails['data']['reference'];
+            $newPayment->amount = ($paymentDetails['data']['amount'])/100;
+            $newPayment->customerID = $paymentDetails['data']['metadata']['customer_id'];
+            $newPayment->status = $paymentDetails['data']['status'];
+            $newPayment->transactionDate = Carbon::now()->toDateString();
+            $newPayment->paymentGateway = "PayStack";
+            $newPayment->save();
+            return redirect('/payment');
+        }
     }
 
-    /**
-     * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function create()
+
+    //Flutterwave
+    public function initialize()
     {
-        //
+        //This generates a payment reference
+        $reference = Flutterwave::generateReference();
+        // dd(request()->phone);
+        // Enter the details of the payment
+        $data = [
+            'payment_options' => 'card,banktransfer',
+            'amount' => request()->amount,
+            'email' => request()->email,
+            'tx_ref' => $reference,
+            'currency' => "NGN",
+            'redirect_url' => route('callback'),
+            'customer' => [
+                'email' => request()->email,
+                "phone_number" => request()->phone,
+                "name" => request()->name
+            ],
+
+            "meta" => [
+                "id" => mt_rand(1000000,9999999)
+            ],
+
+            "customizations" => [
+                "title" => 'Movie Ticket',
+                "description" => "20th October"
+            ]
+        ];
+
+        $payment = Flutterwave::initializePayment($data);
+        // dd($payment);
+
+        if ($payment['status'] !== 'success') {
+            // notify something went wrong
+            return;
+        }
+
+        return redirect($payment['data']['link']);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
-    public function store(Request $request)
+    // Obtain Rave callback information
+    public function callback()
     {
-        //
+        $status = request()->status;
+
+        //if payment is successful
+        if ($status ==  'successful') {
+
+        $transactionID = Flutterwave::getTransactionIDFromCallback();
+        $data = Flutterwave::verifyTransaction($transactionID);
+
+        \Log::info($data);
+
+        //database
+        $newPayment = new Payments();
+        $newPayment->reference = $data['data']['tx_ref'];
+        $newPayment->amount = ($data['data']['amount']);
+        $newPayment->customerID = $data['data']['meta']['id'];
+        $newPayment->status = $data['status'];
+        $newPayment->transactionDate = Carbon::now()->toDateString();
+        $newPayment->paymentGateway = "Flutterwave";
+        $newPayment->save();
+        return redirect('/payment');
+        }
+        elseif ($status ==  'cancelled'){
+            //Put desired action/code after transaction has been cancelled here
+            //posible go back to payment page
+            return redirect('/payment');
+        }
+        else{
+            //Put desired action/code after transaction has failed here
+            \Log::info($data);
+
+
+        //database
+        $newPayment = new Payments();
+        $newPayment->reference = $data['data']['tx_ref'];
+        $newPayment->amount = ($data['data']['amount']);
+        $newPayment->customerID = $data['data']['meta']['id'];
+        $newPayment->status = $data['status'];
+        $newPayment->transactionDate = Carbon::now()->toDateString();
+        $newPayment->paymentGateway = "Flutterwave";
+        $newPayment->save();
+        return redirect('/payment');
+        }
+        // Get the transaction from your DB using the transaction reference (txref)
+        // Check if you have previously given value for the transaction. If you have, redirect to your successpage else, continue
+        // Confirm that the currency on your db transaction is equal to the returned currency
+        // Confirm that the db transaction amount is equal to the returned amount
+        // Update the db transaction record (including parameters that didn't exist before the transaction is completed. for audit purpose)
+        // Give value for the transaction
+        // Update the transaction to note that you have given value for the transaction
+        // You can also redirect to your success page from here
+
     }
 
-    /**
-     * Display the specified resource.
-     *
-     * @param  \App\Models\Payments  $payments
-     * @return \Illuminate\Http\Response
-     */
-    public function show(Payments $payments)
-    {
-        //
-    }
 
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @param  \App\Models\Payments  $payments
-     * @return \Illuminate\Http\Response
-     */
-    public function edit(Payments $payments)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Payments  $payments
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, Payments $payments)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  \App\Models\Payments  $payments
-     * @return \Illuminate\Http\Response
-     */
-    public function destroy(Payments $payments)
-    {
-        //
-    }
 }
