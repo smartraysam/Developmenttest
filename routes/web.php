@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/', [App\Http\Controllers\PaymentsController::class, 'lavaChart']);
+Route::get('/', [App\Http\Controllers\PaymentsController::class, 'getChart']);
 
 //paystack
 Route::post('/pay', [App\Http\Controllers\PaymentsController::class, 'redirectToGateway'])->name('pay');
@@ -26,5 +26,5 @@ Route::post('/rave', [App\Http\Controllers\PaymentsController::class, 'initializ
 // The callback url after a payment
 Route::get('/rave/callback', [App\Http\Controllers\PaymentsController::class, 'callback'])->name('callback');
 
-Route::get('/payment/list', [App\Http\Controllers\PaymentsController::class, 'getPayments'])->name('payments.list');
+Route::get('/payment/list', [App\Http\Controllers\PaymentsController::class, 'updateData'])->name('payments.list');
 Route::get('/filter/list', [App\Http\Controllers\PaymentsController::class, 'Transactions'])->name('payments.transactions');
