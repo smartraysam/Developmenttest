@@ -11,22 +11,20 @@ use KingFlamez\Rave\Facades\Rave as Flutterwave;
 use DataTables;
 use Khill\Lavacharts\Lavacharts;
 
-class PaymentsController extends Controller
-{
-    public function lavaChart(){
-
-        $paymentChart = \Lava::DataTable();
+class PaymentsController extends Controller{
+    private function getDataTable()
+    {
         $combinedChart = \Lava::DataTable();
-
-        //total amount chart
-        $paymentChart->addDateColumn('Year')
-        ->addNumberColumn('Amount');
-
-        //paystack and flutterwave combined charrt
         $combinedChart->addDateColumn('Year')
-        ->addNumberColumn('Paystack')
-        ->addNumberColumn('Flutterwave')
-        ->addNumberColumn('Total');
+                      ->addNumberColumn('Paystack')
+                      ->addNumberColumn('Flutterwave')
+                      ->addNumberColumn('Total');
+
+        return $combinedChart;
+    }
+
+    public function updateData(){
+        $combinedChart = $this->getDataTable();
 
         $dateArray = Payments::distinct()->where('status', 'success')->get(['transactionDate']);
 
@@ -54,26 +52,57 @@ class PaymentsController extends Controller
             $flutterwaveX += $flutterwave->amount;
             }
 
-            $paymentChart->addRow([$date->transactionDate, $amountX]);
+            $combinedChart->addRow([$date->transactionDate, $paystackX, $flutterwaveX, $amountX]);
+        }
+        return $combinedChart->toJson();
+    }
+
+    public function getData(){
+
+        $combinedChart = $this->getDataTable();
+
+        $dateArray = Payments::distinct()->where('status', 'success')->get(['transactionDate']);
+
+        foreach ($dateArray as $date){
+            $amountX = 0.00;
+            $paystackX = 0.00;
+            $flutterwaveX = 0.00;
+
+            $amountArray = Payments::where('transactionDate', $date->transactionDate)->get(['amount']);
+            $paystackArray = Payments::where('transactionDate', $date->transactionDate)->where('paymentGateway', 'paystack')->get(['amount']);
+            $flutterwaveArray = Payments::where('transactionDate', $date->transactionDate)->where('paymentGateway', 'flutterwave')->get(['amount']);
+
+            //Total amount
+            foreach ($amountArray as $amount) {
+                $amountX += $amount->amount;
+             }
+
+            //Paystack amount
+            foreach ($paystackArray as $paystack) {
+            $paystackX += $paystack->amount;
+            }
+
+            //flutterwave amount
+            foreach ($flutterwaveArray as $flutterwave) {
+            $flutterwaveX += $flutterwave->amount;
+            }
+
             $combinedChart->addRow([$date->transactionDate, $paystackX, $flutterwaveX, $amountX]);
         }
 
-        //Amount Chart
-        \Lava::ColumnChart('PaymentChart', $paymentChart, [
-            'title' => 'Payments',
-            'legend' => ['position' => 'out'],
-            'chartArea' => ['width' => '50%'],
-            'hAxis' => ['title' => 'Day', 'format' => 'MMM dd'],
-            'vAxis' => ['title' => 'Amount'] //VerticalAxis Options
-        ]);
+        return $combinedChart;
+    }
 
+    public function getChart(){
         //Paystack & Flutterwave Payments Breakdown
+        $combinedChart = $this->getData();
+        // dd($combinedChart);
         \Lava::ColumnChart('CombinedChart', $combinedChart, [
             'title' => 'Payments Breakdown',
             'legend' => ['position' => 'out'],
             'chartArea' => ['width' => '70%'],
             'hAxis' => ['title' => 'Day', 'format' => 'MMM dd'],
-            'vAxis' => ['title' => 'Amount(₦)'] //VerticalAxis Options
+            'vAxis' => ['title' => 'Amount(₦)', 'scaleType'=> 'log'] //VerticalAxis Options
         ]);
 
         return view('welcome');
@@ -253,45 +282,41 @@ class PaymentsController extends Controller
 
     }
 
-    // filter data with date range  
+       // filter data with date range
     //this function is called in your api
 
     public function RevenueTransactions(Request $request)
     {
         try {
             $from = $request->start_date; // date view
-            $to = $request->end_date; // date from view 
+            $to = $request->end_date; // date from view
 
             if(empty($from) || empty($to)){
                 return response()->json([
                     "status" => "info",
                     "data" => [],
                     "message"=>"start_date or end_date parameter not set",
-                   ]); 
+                   ]);
             }
             $transactions = array();
             $today = date("Y-m-d");
             $yesterday = Carbon::yesterday()->format("Y-m-d");
-    
+
             if (($from == $today && $to == $today) ||($from == $yesterday && $to == $yesterday)) {
-                $transactions = PaymentTransact::where('payment_status', '=', "successful")
-                ->whereDate('payment_transacts.created_at', $from)  // there is date filter for a single date
-                    ->join('estateusers', 'estateusers.meternumber', 'payment_transacts.payerid')
-                    ->join('users', 'users.id', 'estateusers.user_id')
-                   ->orderBy('id', 'desc')
-                    ->select('payment_transacts.*', 'users.name')->get();
+                $transactions = Payments::where('status', '=', "success")
+                ->whereDate('created_at', $from)  // there is date filter for a single date
+                ->orderBy('id', 'desc')
+                ->get();
             } else {
                 $start = Carbon::parse($from);
                 $end = Carbon::parse($to)->addDay();
                 $this_month = [$start, $end];
-                $transactions = PaymentTransact::where('payment_status', '=', "successful")
-                ->whereBetween('payment_transacts.created_at', $this_month) // date filter  for date range
-                   ->join('estateusers', 'estateusers.meternumber', 'payment_transacts.payerid')
-                    ->join('users', 'users.id', 'estateusers.user_id')
+                $transactions = Payments::where('status', '=', "success")
+                ->whereBetween('created_at', $this_month) // date filter  for date range
                    ->orderBy('id', 'desc')
-                    ->select('payment_transacts.*', 'users.name')->get();
+                   ->get();
             }
-           
+
             return response()->json([
                 "status" => "ok",
                 "data" => $transactions
@@ -303,45 +328,39 @@ class PaymentsController extends Controller
                 "message"=>"Error occur",
                ]);
         }
-      
+
     }
 
 
     // the function populate your datatable directly
     public function Transactions(Request $request)
     {
-        
+
             $from = $request->start_date; // date view
-            $to = $request->end_date; // date from view 
+            $to = $request->end_date; // date from view
             $transactions = array();
             $today = date("Y-m-d");
             $yesterday = Carbon::yesterday()->format("Y-m-d");
-    
+
             if (($from == $today && $to == $today) ||($from == $yesterday && $to == $yesterday)) {
-                $transactions = PaymentTransact::where('payment_status', '=', "successful")
-                ->whereDate('payment_transacts.created_at', $from)  // there is date filter for a single date
-                    ->join('estateusers', 'estateusers.meternumber', 'payment_transacts.payerid')
-                    ->join('users', 'users.id', 'estateusers.user_id')
-                   ->orderBy('id', 'desc')
-                    ->select('payment_transacts.*', 'users.name')->get();
+                $transactions = Payments::where('status', '=', "success")
+                ->whereDate('created_at', $from)  // there is date filter for a single date
+                   ->orderBy('id', 'desc')->get();
             } else {
                 $start = Carbon::parse($from);
                 $end = Carbon::parse($to)->addDay();
                 $this_month = [$start, $end];
-                $transactions = PaymentTransact::where('payment_status', '=', "successful")
-                ->whereBetween('payment_transacts.created_at', $this_month) // date filter  for date range
-                   ->join('estateusers', 'estateusers.meternumber', 'payment_transacts.payerid')
-                    ->join('users', 'users.id', 'estateusers.user_id')
-                   ->orderBy('id', 'desc')
-                    ->select('payment_transacts.*', 'users.name')->get();
+                $transactions = Payments::where('status', '=', "success")
+                ->whereBetween('created_at', $this_month) // date filter  for date range
+                ->orderBy('id', 'desc')
+                ->get();
             }
-           
-      
-        if (request()->ajax()) {
-            return DataTables::of($transactions)  // return data to datatable
+
+
+            if (request()->ajax()) {
+                return DataTables::of($transactions)  // return data to datatable
+                ->addIndexColumn()
                 ->make(true);
-        }
+            }
     }
-
-
 }
